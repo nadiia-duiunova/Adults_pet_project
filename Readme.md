@@ -1,3 +1,4 @@
+### ***This project is currently under development, but you are welcome to check it out***
 ### Yearly income prediction
 
 From the UCI repository of machine learning datasets, this database contains `14` features concerning demographic characteristics of `45,222` rows (`32,561` for training and `12,661` for testing). The task is to predict whether a person has a yearly income that is more or less than `$50,000`, hence the proble will be formulated as  classification task*.
