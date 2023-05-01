@@ -3,9 +3,25 @@ from sklearn.preprocessing import StandardScaler, OrdinalEncoder, OneHotEncoder
 from sklearn.compose import ColumnTransformer, make_column_selector
 import scipy.sparse as sps
 
-def preprocess_data(dataframe: pd.DataFrame, numerical_features_list: list, categorical_features_list: list):
-    X = dataframe.drop(['Income'], axis = 'columns')
-    y = dataframe["Income"]
+def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categorical_features_list: list, TARGET: str = 'Income') -> pd.DataFrame:
+    """Transform the data according to it's original format in order to feed it to the model.
+    Parameters
+    ----------
+        data : pdandas.DataFrame 
+            Dataframe with variables in columns and instances in rows, where data is represented in original data types.
+        target : str
+            Name of target variable
+        numerical_features_list : list
+            List of features, that have numerical format in original dataframe
+        categorical_features_list : list
+            List of features, that are represented as categories in original dataframe
+    Returns
+    -------
+        preprocessed_data : pandas.DataFrame
+            preprocessed data, ready to be fed to the model
+    """
+    X = data.drop(columns=[TARGET])
+    y = list(data[TARGET])
 
     columntransformer = ColumnTransformer(transformers = [
     ('ordinal', OrdinalEncoder(categories=[[' Preschool',' 1st-4th',' 5th-6th',' 7th-8th',' 9th',' 10th',' 11th',
@@ -24,17 +40,27 @@ def preprocess_data(dataframe: pd.DataFrame, numerical_features_list: list, cate
     x_columns_names = columntransformer.get_feature_names_out()
     X_trans = pd.DataFrame(X_trans, columns = x_columns_names)
 
-    y_train_df = pd.DataFrame(y)
-    onehot = OneHotEncoder(dtype='int', drop='first')
-    y_trans = onehot.fit_transform(y_train_df)
-    y_column_name = onehot.get_feature_names_out()
-    y_trans = pd.DataFrame.sparse.from_spmatrix(y_trans, columns=y_column_name)
+    y_trans = pd.DataFrame(data = y, index=range(0, len(y)), columns=[TARGET])
+    y_trans[TARGET] = y_trans[TARGET].replace({' <=50K':0, ' >50K':1})
 
-    new_data = pd.merge(left=y_trans, right=X_trans, left_index=True, right_index=True)
+    preprocessed_data = pd.merge(left=y_trans, right=X_trans, left_index=True, right_index=True)
 
-    return new_data
 
-def cluster_categorical(data):
+    return preprocessed_data
+
+def cluster_categorical(data: pd.DataFrame) -> pd.DataFrame:
+    """Cluster those cutegories, that make sence being clustered, like clustering countries into developed and developing
+
+    Parameters
+    ----------
+        data : pandas.DataFrame
+            Original dataframe with variables in columns and instances in rows   
+
+    Returns
+    -------
+        data : pandas.DataFrame
+            The same dataframe, but with some categories or some features clustered together
+    """
 
     # cluster Workclass
     data['Workclass'] = data['Workclass'].replace({' Never-worked': ' Without-pay'})
