@@ -3,7 +3,8 @@ from sklearn.preprocessing import StandardScaler, OrdinalEncoder, OneHotEncoder
 from sklearn.compose import ColumnTransformer, make_column_selector
 import scipy.sparse as sps
 
-def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categorical_features_list: list, TARGET: str = 'Income') -> pd.DataFrame:
+def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categorical_features_list: list, 
+                    TARGET: str = 'Income', education: bool = True) -> pd.DataFrame:
     """Transform the data according to it's original format in order to feed it to the model.
     Parameters
     ----------
@@ -23,14 +24,20 @@ def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categoric
     X = data.drop(columns=[TARGET])
     y = list(data[TARGET])
 
-    columntransformer = ColumnTransformer(transformers = [
-    ('ordinal', OrdinalEncoder(categories=[[' Preschool',' 1st-4th',' 5th-6th',' 7th-8th',' 9th',' 10th',' 11th',
-                                        ' 12th',' HS-grad',' Some-college',' Assoc-voc',' Assoc-acdm', 
-                                        ' Bachelors',' Masters',' Prof-school',' Doctorate']]),
-                                make_column_selector(pattern = 'Education')),
-    ('stand scaler', StandardScaler(), numerical_features_list),
-    ('onehot', OneHotEncoder(dtype='int', drop='first'), categorical_features_list)],
-    remainder='drop')
+    if education:
+        columntransformer = ColumnTransformer(transformers = [
+            ('ordinal', OrdinalEncoder(categories=[[' Preschool',' 1st-4th',' 5th-6th',' 7th-8th',' 9th',' 10th',' 11th',
+                                            ' 12th',' HS-grad',' Some-college',' Assoc-voc',' Assoc-acdm', 
+                                            ' Bachelors',' Masters',' Prof-school',' Doctorate']]),
+                                    make_column_selector(pattern = 'Education')),
+            ('stand scaler', StandardScaler(), numerical_features_list),
+            ('onehot', OneHotEncoder(dtype='int', drop='first'), categorical_features_list)],
+            remainder='drop')
+    else:
+        columntransformer = ColumnTransformer(transformers = [
+            ('stand scaler', StandardScaler(), numerical_features_list),
+            ('onehot', OneHotEncoder(dtype='int', drop='first'), categorical_features_list)],
+            remainder='drop')
 
     X_trans = columntransformer.fit_transform(X)
 
@@ -40,6 +47,9 @@ def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categoric
     x_columns_names = columntransformer.get_feature_names_out()
     X_trans = pd.DataFrame(X_trans, columns = x_columns_names)
 
+    if education == False:
+        X_trans = pd.merge(left=X_trans, right=pd.DataFrame(data["Education"]), left_index=True, right_index=True)
+
     y_trans = pd.DataFrame(data = y, index=range(0, len(y)), columns=[TARGET])
     y_trans[TARGET] = y_trans[TARGET].replace({' <=50K':0, ' >50K':1})
 
@@ -47,6 +57,8 @@ def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categoric
 
 
     return preprocessed_data
+
+
 
 def cluster_categorical(data: pd.DataFrame) -> pd.DataFrame:
     """Cluster those cutegories, that make sence being clustered, like clustering countries into developed and developing
