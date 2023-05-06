@@ -1,7 +1,39 @@
 import pandas as pd
+import numpy as np
 from sklearn.preprocessing import StandardScaler, OrdinalEncoder, OneHotEncoder
 from sklearn.compose import ColumnTransformer, make_column_selector
 import scipy.sparse as sps
+
+def get_data():
+    adult_columns = [
+        "Age",
+        "Workclass",
+        "final weight",
+        "Education",
+        "Education-Num",
+        "Marital Status",
+        "Occupation",
+        "Relationship",
+        "Ethnic group",
+        "Sex",
+        "Capital Gain",
+        "Capital Loss",
+        "Hours per week",
+        "Country",
+        "Income",
+    ]
+
+    df = pd.read_csv("adult.data", header=None, names=adult_columns)
+    df = df.replace(to_replace= ' ?', value = np.nan)
+
+    TARGET = 'Income'
+
+    X = df[['Age', 'Hours per week', 'Education', 'Capital Gain', 'Capital Loss']].copy()
+    y = pd.DataFrame(df[TARGET])
+
+    return X, y
+
+
 
 def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categorical_features_list: list, 
                     TARGET: str = 'Income', education: bool = True) -> pd.DataFrame:
