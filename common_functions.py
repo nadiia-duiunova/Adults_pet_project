@@ -4,7 +4,7 @@ from sklearn.preprocessing import StandardScaler, OrdinalEncoder, OneHotEncoder
 from sklearn.compose import ColumnTransformer, make_column_selector
 import scipy.sparse as sps
 
-def get_data():
+def get_clean_data() -> pd.DataFrame:
     adult_columns = [
         "Age",
         "Workclass",
@@ -23,15 +23,19 @@ def get_data():
         "Income",
     ]
 
-    df = pd.read_csv("adult.data", header=None, names=adult_columns)
+    df = pd.read_csv("https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data", header=None, names=adult_columns)
     df = df.replace(to_replace= ' ?', value = np.nan)
+    df = df.dropna(how='any').reset_index(drop=True)
+    df = df.drop(columns=['final weight'])
 
-    TARGET = 'Income'
+    categorical_features_list = ['Workclass', 'Education', 'Marital Status', 'Occupation', 'Relationship', 'Ethnic group', 'Sex', 'Country', 'Income']
 
-    X = df[['Age', 'Hours per week', 'Education', 'Capital Gain', 'Capital Loss']].copy()
-    y = pd.DataFrame(df[TARGET])
+    for col in categorical_features_list:
+        col_num = df.columns.get_loc(col)
+        for row in range(df.shape[0]):
+            df.iloc[row,col_num] = df.iloc[row,col_num][1:]
 
-    return X, y
+    return df
 
 
 
@@ -58,9 +62,9 @@ def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categoric
 
     if education:
         columntransformer = ColumnTransformer(transformers = [
-            ('ordinal', OrdinalEncoder(categories=[[' Preschool',' 1st-4th',' 5th-6th',' 7th-8th',' 9th',' 10th',' 11th',
-                                            ' 12th',' HS-grad',' Some-college',' Assoc-voc',' Assoc-acdm', 
-                                            ' Bachelors',' Masters',' Prof-school',' Doctorate']]),
+            ('ordinal', OrdinalEncoder(categories=[['Preschool','1st-4th','5th-6th','7th-8th','9th','10th','11th',
+                                            '12th','HS-grad','Some-college','Assoc-voc','Assoc-acdm', 
+                                            'Bachelors','Masters','Prof-school','Doctorate']]),
                                     make_column_selector(pattern = 'Education')),
             ('stand scaler', StandardScaler(), numerical_features_list),
             ('onehot', OneHotEncoder(dtype='int', drop='first'), categorical_features_list)],
@@ -83,7 +87,7 @@ def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categoric
         X_trans = pd.merge(left=X_trans, right=pd.DataFrame(data["Education"]), left_index=True, right_index=True)
 
     y_trans = pd.DataFrame(data = y, index=range(0, len(y)), columns=[TARGET])
-    y_trans[TARGET] = y_trans[TARGET].replace({' <=50K':0, ' >50K':1})
+    y_trans[TARGET] = y_trans[TARGET].replace({'<=50K':0, '>50K':1})
 
     preprocessed_data = pd.merge(left=y_trans, right=X_trans, left_index=True, right_index=True)
 
@@ -107,36 +111,36 @@ def cluster_categorical(data: pd.DataFrame) -> pd.DataFrame:
     """
 
     # cluster Workclass
-    data['Workclass'] = data['Workclass'].replace({' Never-worked': ' Without-pay'})
+    data['Workclass'] = data['Workclass'].replace({'Never-worked': 'Without-pay'})
 
     # cluster Marital status
     data.loc[
-        lambda x: x["Marital Status"].isin([' Widowed', ' Separated', ' Married-spouse-absent', ' Never-married', ' Divorced']), "Marital Status"
+        lambda x: x["Marital Status"].isin(['Widowed', 'Separated', 'Married-spouse-absent', 'Never-married', 'Divorced']), "Marital Status"
     ] = "Single"
 
     data.loc[
-        lambda x: x["Marital Status"].isin([' Married-AF-spouse', ' Married-civ-spouse']), "Marital Status"
+        lambda x: x["Marital Status"].isin(['Married-AF-spouse', 'Married-civ-spouse']), "Marital Status"
     ] = "Married"
 
      # cluster Relationship
     data.loc[
-        lambda x: x["Relationship"].isin([' Husband', ' Wife', ' Own-child']), "Relationship"
+        lambda x: x["Relationship"].isin(['Husband', 'Wife', 'Own-child']), "Relationship"
     ] = "Family"
 
     data.loc[
-        lambda x: x["Relationship"].isin([' Not-in-family', ' Unmarried', ' Other-relative']), "Relationship"
+        lambda x: x["Relationship"].isin(['Not-in-family', 'Unmarried', 'Other-relative']), "Relationship"
     ] = "Not-in-Family"
 
     # cluster Countries
     data.loc[
-        lambda x: x["Country"].isin([' Holand-Netherlands', ' Scotland', ' Italy', ' England', ' Ireland', ' Germany', ' Hong',  ' France', ' Taiwan', 
-                                    ' Japan', ' Puerto-Rico', ' Canada', ' United-States']), "Country"
+        lambda x: x["Country"].isin(['Holand-Netherlands', 'Scotland', 'Italy', 'England', 'Ireland', 'Germany', 'Hong',  'France', 'Taiwan', 
+                                    'Japan', 'Puerto-Rico', 'Canada', 'United-States']), "Country"
     ] = "Developed"
 
     data.loc[
-        lambda x: x["Country"].isin([' Hungary', ' Greece', ' Portugal', ' Poland', ' Yugoslavia', ' Cambodia', ' Iran',  ' Philippines', ' Laos', ' Thailand', ' Vietnam', ' South', 
-                                    ' China', ' India', ' Honduras', ' Outlying-US(Guam-USVI-etc)', ' Trinadad&Tobago', ' Ecuador',  ' Philippines', ' Nicaragua',
-                                    ' Peru', ' Haiti', ' Columbia', ' Guatemala', ' Dominican-Republic', ' Jamaica',  ' Cuba', ' El-Salvador', ' Mexico']), "Country"
+        lambda x: x["Country"].isin(['Hungary', 'Greece', 'Portugal', 'Poland', 'Yugoslavia', 'Cambodia', 'Iran',  'Philippines', 'Laos', 'Thailand', 'Vietnam', 'South', 
+                                    'China', 'India', 'Honduras', 'Outlying-US(Guam-USVI-etc)', 'Trinadad&Tobago', 'Ecuador',  'Philippines', 'Nicaragua',
+                                    'Peru', 'Haiti', 'Columbia', 'Guatemala', 'Dominican-Republic', 'Jamaica',  'Cuba', 'El-Salvador', 'Mexico']), "Country"
     ] = "Developing"
 
     return data
