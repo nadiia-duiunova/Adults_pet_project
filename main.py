@@ -1,70 +1,76 @@
 from fastapi import FastAPI
 import pandas as pd
 import numpy as np
-from common_functions import get_data
+from common_functions import get_clean_data, cluster_categorical
 from sklearn.preprocessing import OrdinalEncoder
 from sklearn.model_selection import train_test_split
 from joblib import load
 
 app = FastAPI()
 
-X, y = get_data()
+data = get_clean_data()
+TARGET = 'Income'
 
-oe = OrdinalEncoder(categories=[[' Preschool',' 1st-4th',' 5th-6th',' 7th-8th',' 9th',' 10th',' 11th',
-                                            ' 12th',' HS-grad',' Some-college',' Assoc-voc',' Assoc-acdm', 
-                                            ' Bachelors',' Masters',' Prof-school',' Doctorate']], dtype = int)
-X['Education'] = oe.fit_transform(X[['Education']])
+data = data[~data['Workclass'].isin(['Never-worked', 'Without-pay'])]
 
-X_train, X_cv, y_train, y_cv = train_test_split(X, y, train_size=0.2)
+def cluster_education(df):
+    df.loc[
+        lambda x: x["Education-Num"].between(0, 8, "both"), "Education"
+    ] = "Under-grad"
 
-model = load('rand_forest_shorten.joblib')
+    df.loc[
+        lambda x: x["Education-Num"] == 9, "Education"
+    ] = "HS-grad"
 
-def predict_income(age: int, hours_per_week: int, education: str, capital_gain: int = 0, capital_loss: int = 0):
+    df.loc[
+        lambda x: x["Education-Num"] == 10, "Education"
+    ] = "Some-college"
+
+    df.loc[
+        lambda x: x["Education-Num"].between(11, 16, 'both'), "Education"
+    ] = "Above-grad"
+
+    scale_mapper = {'Under-grad':0, 'Some-college':1, 'HS-grad':2, 'Above-grad':3}
+    df["Education"] = df["Education"].replace(scale_mapper)
+
+cluster_education(data)
+data = cluster_categorical(data)
+data = data.drop(columns=['Education-Num'])
+
+X = data.drop(columns=[TARGET])
+y = data[TARGET]
+
+X_train, X_cv, y_train, y_cv = train_test_split(X, y, test_size=0.2)
+
+model = load('rand_forest_full.joblib')
+
+def predict_income(age: int, workclass:str, education: str, marital_status: str, occupation: str, relationship: str, 
+                   ethnic_group: str, sex: str, country: str, capital_gain: int = 0, capital_loss: int = 0, hours_per_week: int = 40):
     model.fit(X_train, y_train)
 
-    if education ==' Preschool':
-        education_int = 0
-    elif education == ' 1st-4th':
-        education_int = 1
-    elif education == ' 5th-6th':
-        education_int = 2
-    elif education == ' 7st-8th':
-        education_int = 3
-    elif education == ' 9th':
-        education_int = 4
-    elif education == ' 10th':
-        education_int = 5
-    elif education == ' 11th':
-        education_int = 6
-    elif education == ' 12th':
-        education_int = 7
-    elif education == ' HS-grad':
-        education_int = 8
-    elif education == ' Some-college':
-        education_int = 9
-    elif education == ' Assoc-voc':
-        education_int = 10
-    elif education == ' Assoc-acdm':
-        education_int = 11
-    elif education == ' Bachelors':
-        education_int = 12
-    elif education == ' Masters':
-        education_int = 13
-    elif education == ' Prof-school':
-        education_int = 14
-    else:
-        education_int = 15
+    # transform data from user input to the same clusters as train data
+    # education
+    # marital status
+    # relationship
+    # country
+    
 
-    X_predictable = [[age, hours_per_week, education_int, capital_gain, capital_loss]]
+    X_predictable = pd.DataFrame([[age, workclass, education, marital_status, occupation, relationship, ethnic_group, sex, capital_gain, capital_loss, hours_per_week, country]], columns=X_train.columns)
     income_prediction = model.predict(X_predictable)[0]
-    prob_high_income = round(model.predict_proba(X_predictable)[0][1], 4)
+    prediction_prob = model.predict_proba(X_predictable)
+
+    if income_prediction == '>50K':
+        prediction_prob = prediction_prob[0][1]
+    else:
+        prediction_prob = prediction_prob[0][0]
 
     return {'result': income_prediction,
-            'high_inc_prob': float(prob_high_income)*100}
+            'prediction_prob': float(prediction_prob)*100}
 
 
 
 
 @app.get("/predict_induvidual_income/")
-def predict_income_result(age: int, hours_per_week: int, education: str, capital_gain: int = 0, capital_loss: int = 0):
-    return predict_income(age, hours_per_week, education, capital_gain, capital_loss)
+def predict_income_result(age: int, workclass:str, education: str, marital_status: str, occupation: str, relationship: str, 
+                   ethnic_group: str, sex: str, country: str, capital_gain: int = 0, capital_loss: int = 0, hours_per_week: int = 40):
+    return predict_income(age, workclass, education, marital_status, occupation, relationship, ethnic_group, sex, country, capital_gain, capital_loss, hours_per_week)
