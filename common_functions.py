@@ -4,7 +4,21 @@ from sklearn.preprocessing import StandardScaler, OrdinalEncoder, OneHotEncoder
 from sklearn.compose import ColumnTransformer, make_column_selector
 import scipy.sparse as sps
 
-def get_clean_data() -> pd.DataFrame:
+def get_clean_data(url: str, drop_columns: list) -> pd.DataFrame:
+    """ Downloads data from url and removes selected columns. Also removes all spaces before values of categorical featues
+    
+    Parameters
+    ----------
+        url: str
+            Link to download data
+        drop_columns: list
+            List of columns, that have to be dropped from datadrame
+    Returns
+    -------
+        df: pd.DataFrame: 
+            Dataframe with initial data cleaning, including removement of missing data and spaces at the beginning of each categorical value.
+    """
+
     adult_columns = [
         "Age",
         "Workclass",
@@ -23,10 +37,10 @@ def get_clean_data() -> pd.DataFrame:
         "Income",
     ]
 
-    df = pd.read_csv("https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data", header=None, names=adult_columns)
+    df = pd.read_csv(url, header=None, names=adult_columns)
     df = df.replace(to_replace= ' ?', value = np.nan)
     df = df.dropna(how='any').reset_index(drop=True)
-    df = df.drop(columns=['final weight'])
+    df = df.drop(columns=drop_columns)
 
     categorical_features_list = ['Workclass', 'Education', 'Marital Status', 'Occupation', 'Relationship', 'Ethnic group', 'Sex', 'Country', 'Income']
 
@@ -42,20 +56,23 @@ def get_clean_data() -> pd.DataFrame:
 def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categorical_features_list: list, 
                     TARGET: str = 'Income', education: bool = True) -> pd.DataFrame:
     """Transform the data according to it's original format in order to feed it to the model.
+    
     Parameters
     ----------
         data : pdandas.DataFrame 
             Dataframe with variables in columns and instances in rows, where data is represented in original data types.
-        target : str
-            Name of target variable
         numerical_features_list : list
             List of features, that have numerical format in original dataframe
         categorical_features_list : list
             List of features, that are represented as categories in original dataframe
+            TARGET : str
+            Name of target variable
+        education: bool
+            Whether or not apply ordinal encoder to the Education feature
     Returns
     -------
         preprocessed_data : pandas.DataFrame
-            preprocessed data, ready to be fed to the model
+            Preprocessed data, ready to be fed to the model
     """
     X = data.drop(columns=[TARGET])
     y = list(data[TARGET])
@@ -94,7 +111,39 @@ def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categoric
 
     return preprocessed_data
 
+def cluster_education(df: pd.DataFrame) -> pd.DataFrame:
+    """Cluster Education values into 4 categories: Undergraduated, High school graduated, Some college and Above graduated
 
+    Parameters
+    -----------
+        df: pd.DataFrame 
+            Initial dataframe with original data in Education column
+
+    Returns
+    --------
+        df: pd.DataFrame
+            The same dataframe, as was inputed, but with clustered Education values
+    """
+    df.loc[
+        lambda x: x["Education-Num"].between(0, 8, "both"), "Education"
+    ] = "Under-grad"
+
+    df.loc[
+        lambda x: x["Education-Num"] == 9, "Education"
+    ] = "HS-grad"
+
+    df.loc[
+        lambda x: x["Education-Num"] == 10, "Education"
+    ] = "Some-college"
+
+    df.loc[
+        lambda x: x["Education-Num"].between(11, 16, 'both'), "Education"
+    ] = "Above-grad"
+
+    scale_mapper = {'Under-grad':0, 'Some-college':1, 'HS-grad':2, 'Above-grad':3}
+    df["Education"] = df["Education"].replace(scale_mapper)
+
+    return df
 
 def cluster_categorical(data: pd.DataFrame) -> pd.DataFrame:
     """Cluster those cutegories, that make sence being clustered, like clustering countries into developed and developing
@@ -114,34 +163,15 @@ def cluster_categorical(data: pd.DataFrame) -> pd.DataFrame:
     data['Workclass'] = data['Workclass'].replace({'Never-worked': 'Without-pay'})
 
     # cluster Marital status
-    data.loc[
-        lambda x: x["Marital Status"].isin(['Widowed', 'Separated', 'Married-spouse-absent', 'Never-married', 'Divorced']), "Marital Status"
-    ] = "Single"
+    data['Marital Status'] = np.where(data['Marital Status'].isin(['Married-AF-spouse', 'Married-civ-spouse']), 'Married', 'Single')
 
-    data.loc[
-        lambda x: x["Marital Status"].isin(['Married-AF-spouse', 'Married-civ-spouse']), "Marital Status"
-    ] = "Married"
-
-     # cluster Relationship
-    data.loc[
-        lambda x: x["Relationship"].isin(['Husband', 'Wife', 'Own-child']), "Relationship"
-    ] = "Family"
-
-    data.loc[
-        lambda x: x["Relationship"].isin(['Not-in-family', 'Unmarried', 'Other-relative']), "Relationship"
-    ] = "Not-in-Family"
+    # cluster Relationship
+    data['Relationship'] = np.where(data['Relationship'].isin(['Husband', 'Wife', 'Own-child']), 'Family', 'Not-in-Family')
 
     # cluster Countries
-    data.loc[
-        lambda x: x["Country"].isin(['Holand-Netherlands', 'Scotland', 'Italy', 'England', 'Ireland', 'Germany', 'Hong',  'France', 'Taiwan', 
-                                    'Japan', 'Puerto-Rico', 'Canada', 'United-States']), "Country"
-    ] = "Developed"
-
-    data.loc[
-        lambda x: x["Country"].isin(['Hungary', 'Greece', 'Portugal', 'Poland', 'Yugoslavia', 'Cambodia', 'Iran',  'Philippines', 'Laos', 'Thailand', 'Vietnam', 'South', 
-                                    'China', 'India', 'Honduras', 'Outlying-US(Guam-USVI-etc)', 'Trinadad&Tobago', 'Ecuador',  'Philippines', 'Nicaragua',
-                                    'Peru', 'Haiti', 'Columbia', 'Guatemala', 'Dominican-Republic', 'Jamaica',  'Cuba', 'El-Salvador', 'Mexico']), "Country"
-    ] = "Developing"
+    data['Country'] = np.where(data['Country'].isin(['Hungary', 'Greece', 'Portugal', 'Poland', 'Holand-Netherlands', 'Scotland', 'Italy', 
+                                                     'England', 'Ireland', 'Germany', 'Hong', 'France', 'Japan', 'Canada', 'United-States']
+                                                    ), 'Developed', 'Developing')
 
     return data
 
