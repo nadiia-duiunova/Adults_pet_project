@@ -1,10 +1,13 @@
 from fastapi import FastAPI
+from joblib import load
 import pandas as pd
 import numpy as np
-from common_functions import cluster_categorical, cluster_education
-from joblib import load
-import shap
+import matplotlib
 
+import shap
+from common_functions import cluster_categorical, cluster_education
+
+matplotlib.use('agg')
 app = FastAPI()
 
 # read precleaned data
@@ -116,13 +119,17 @@ def predict_income(age: int, workclass:str, education: str, marital_status: str,
         
         new_shap_values.append(values_sum)
 
-    new_shap_values = new_shap_values[0][:-1]
+    new_shap_values = np.array([new_shap_values[0][:-1]], dtype=object)
+
+    shap.force_plot(expected_value, new_shap_values, X_predictable, matplotlib=True, show=False)
+    pic_name = "2pic_name.png"
+    matplotlib.pyplot.savefig(pic_name)
+
 
 
     return {'result': income_prediction,
             'prediction_prob': float(prediction_prob)*100,
-            'shap_values': new_shap_values,
-            'expected_value': expected_value
+            'pic_name': pic_name
             }
 
 
@@ -131,3 +138,7 @@ def predict_income(age: int, workclass:str, education: str, marital_status: str,
 def predict_income_result(age: int, workclass:str, education: str, marital_status: str, occupation: str, relationship: str, 
                    ethnic_group: str, sex: str, country: str, capital_gain: int, capital_loss: int, hours_per_week: int):
     return predict_income(age, workclass, education, marital_status, occupation, relationship, ethnic_group, sex, country, capital_gain, capital_loss, hours_per_week)
+
+# @app.get('/predict_with_img')
+# def predict_with_img():
+#     return 
