@@ -37,52 +37,53 @@ def get_clean_data(url: str, drop_columns: list) -> pd.DataFrame:
         "Income",
     ]
 
-    df = pd.read_csv(url, header=None, names=adult_columns)
-    df = df.replace(to_replace= ' ?', value = np.nan)
+    df = pd.read_csv(url, header=None, names=adult_columns).apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+    df = df.replace(to_replace= '?', value = np.nan)
     df = df.dropna(how='any').reset_index(drop=True)
     df = df.drop(columns=drop_columns)
-
-    categorical_features_list = ['Workclass', 'Education', 'Marital Status', 'Occupation', 'Relationship', 'Ethnic group', 'Sex', 'Country', 'Income']
-
-    for col in categorical_features_list:
-        col_num = df.columns.get_loc(col)
-        for row in range(df.shape[0]):
-            df.iloc[row,col_num] = df.iloc[row,col_num][1:]
-
+    
     return df
 
 
 
-def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categorical_features_list: list, 
-                    TARGET: str = 'Income', education: bool = True) -> pd.DataFrame:
-    """Transform the data according to it's original format in order to feed it to the model.
+def preprocess_data(data: pd.DataFrame, 
+                    TARGET: str,
+                    numerical_features_list: list, categorical_features_list: list,  ordinal_feature: str = '', order_of_categories: list = []
+                    ) -> pd.DataFrame:
+    """Transform the data according to it's format in order to feed it to the model.
     
     Parameters
     ----------
         data : pdandas.DataFrame 
             Dataframe with variables in columns and instances in rows, where data is represented in original data types.
+        TARGET : str
+            Name of target variable
         numerical_features_list : list
             List of features, that have numerical format in original dataframe
         categorical_features_list : list
             List of features, that are represented as categories in original dataframe
-            TARGET : str
-            Name of target variable
-        education: bool
-            Whether or not apply ordinal encoder to the Education feature
+        ordinal_feature: str
+            This function can precess only 1 ordinal feature, will be optimized in future
+        order_of_categories: list
+            Here you have to provide the right ascending order of values of the ordinal feature as a list 
+        
+    !_NOTE_!
+    --------
+    If you process you ordinal feature separately, you will have to add it manually to the result of this function!!!
+
     Returns
     -------
         preprocessed_data : pandas.DataFrame
             Preprocessed data, ready to be fed to the model
     """
+
     X = data.drop(columns=[TARGET])
     y = list(data[TARGET])
 
-    if education:
+    if ordinal_feature != '':
         columntransformer = ColumnTransformer(transformers = [
-            ('ordinal', OrdinalEncoder(categories=[['Preschool','1st-4th','5th-6th','7th-8th','9th','10th','11th',
-                                            '12th','HS-grad','Some-college','Assoc-voc','Assoc-acdm', 
-                                            'Bachelors','Masters','Prof-school','Doctorate']]),
-                                    make_column_selector(pattern = 'Education')),
+            ('ordinal', OrdinalEncoder(categories=[order_of_categories]),
+                                    make_column_selector(pattern = ordinal_feature)),
             ('stand scaler', StandardScaler(), numerical_features_list),
             ('onehot', OneHotEncoder(dtype='int', drop='first'), categorical_features_list)],
             remainder='drop')
@@ -100,11 +101,22 @@ def preprocess_data(data: pd.DataFrame, numerical_features_list: list, categoric
     x_columns_names = columntransformer.get_feature_names_out()
     X_trans = pd.DataFrame(X_trans, columns = x_columns_names)
 
-    if education == False:
-        X_trans = pd.merge(left=X_trans, right=pd.DataFrame(data["Education"]), left_index=True, right_index=True)
-
     y_trans = pd.DataFrame(data = y, index=range(0, len(y)), columns=[TARGET])
-    y_trans[TARGET] = y_trans[TARGET].replace({'<=50K':0, '>50K':1})
+
+    # for categorical target create a dictionary with substituting every category with a number and apply to target
+    if all(isinstance(n, str) for n in y_trans[TARGET]):
+        n_unique = len(y_trans[TARGET].unique())
+        dict_of_values = {}
+        for i in range(n_unique):
+            key = y_trans[TARGET].unique()[i]
+            dict_of_values[key] = i
+            
+        y_trans[TARGET] = y_trans[TARGET].replace(dict_of_values)
+
+    # for numerical target - apply StandardScaler()
+    else: 
+        scaler = StandardScaler()
+        y_trans[TARGET] = scaler.fit_transform(y_trans)
 
     preprocessed_data = pd.merge(left=y_trans, right=X_trans, left_index=True, right_index=True)
 
