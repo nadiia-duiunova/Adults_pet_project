@@ -48,7 +48,9 @@ def get_clean_data(url: str, drop_columns: list) -> pd.DataFrame:
 
 def preprocess_data(data: pd.DataFrame, 
                     TARGET: str,
-                    numerical_features_list: list, categorical_features_list: list,  ordinal_feature: str = '', order_of_categories: list = []
+                    numerical_features_list: list, 
+                    categorical_features_list: list,  
+                    ordinal_feature: str = '', order_of_categories: list = []
                     ) -> pd.DataFrame:
     """Transform the data according to it's format in order to feed it to the model.
     
@@ -81,15 +83,48 @@ def preprocess_data(data: pd.DataFrame,
     y = list(data[TARGET])
 
     if ordinal_feature != '':
-        columntransformer = ColumnTransformer(transformers = [
-            ('ordinal', OrdinalEncoder(categories=[order_of_categories]),
-                                    make_column_selector(pattern = ordinal_feature)),
-            ('stand scaler', StandardScaler(), numerical_features_list),
-            ('onehot', OneHotEncoder(dtype='int', drop='first'), categorical_features_list)],
+        if not order_of_categories:
+            raise ValueError('order_of_categories cannot be empty')
+        if len(order_of_categories) != len(data[ordinal_feature].unique()):
+            raise ValueError('incorrect number of categories in order_of_categories')
+        if numerical_features_list:
+            if categorical_features_list:
+                columntransformer = ColumnTransformer(transformers = [
+                    ('ordinal', OrdinalEncoder(categories=[order_of_categories]),
+                                            make_column_selector(pattern = ordinal_feature)),
+                    ('stand scaler', StandardScaler(), numerical_features_list),
+                    ('onehot', OneHotEncoder(dtype='int', drop='first'), categorical_features_list)],
+                    remainder='drop')
+            else:
+                columntransformer = ColumnTransformer(transformers = [
+                    ('ordinal', OrdinalEncoder(categories=[order_of_categories]),
+                                            make_column_selector(pattern = ordinal_feature)),
+                    ('stand scaler', StandardScaler(), numerical_features_list)],
+                    remainder='drop')
+        else:
+            if categorical_features_list:
+                columntransformer = ColumnTransformer(transformers = [
+                    ('ordinal', OrdinalEncoder(categories=[order_of_categories]),
+                                            make_column_selector(pattern = ordinal_feature)),
+                    ('onehot', OneHotEncoder(dtype='int', drop='first'), categorical_features_list)],
+                    remainder='drop')
+            else:
+                columntransformer = ColumnTransformer(transformers = [
+                    ('ordinal', OrdinalEncoder(categories=[order_of_categories]),
+                                            make_column_selector(pattern = ordinal_feature))],
+                    remainder='drop')
+    elif numerical_features_list:
+        if categorical_features_list:
+            columntransformer = ColumnTransformer(transformers = [
+                ('stand scaler', StandardScaler(), numerical_features_list),
+                ('onehot', OneHotEncoder(dtype='int', drop='first'), categorical_features_list)],
+                remainder='drop')
+        else:
+            columntransformer = ColumnTransformer(transformers = [
+            ('stand scaler', StandardScaler(), numerical_features_list)],
             remainder='drop')
     else:
         columntransformer = ColumnTransformer(transformers = [
-            ('stand scaler', StandardScaler(), numerical_features_list),
             ('onehot', OneHotEncoder(dtype='int', drop='first'), categorical_features_list)],
             remainder='drop')
 
@@ -103,7 +138,7 @@ def preprocess_data(data: pd.DataFrame,
 
     y_trans = pd.DataFrame(data = y, index=range(0, len(y)), columns=[TARGET])
 
-    # for categorical target create a dictionary with substituting every category with a number and apply to target
+    # for categorical target create a dictionary for substituting every category with a number and apply to target
     if all(isinstance(n, str) for n in y_trans[TARGET]):
         n_unique = len(y_trans[TARGET].unique())
         dict_of_values = {}
@@ -186,4 +221,3 @@ def cluster_categorical(data: pd.DataFrame) -> pd.DataFrame:
                                                     ), 'Developed', 'Developing')
 
     return data
-
